@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shorts Intel — YouTube Analyzer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:          #07070f;
+      --surface:     #0d0d1a;
+      --surface-2:   #121220;
+      --surface-3:   #181828;
+      --border:      rgba(255,255,255,0.06);
+      --border-bright: rgba(255,255,255,0.13);
+      --red:         #ff2d55;
+      --red-dark:    #c4122f;
+      --coral:       #ff6b35;
+      --gold:        #f5a623;
+      --green:       #00d68f;
+      --blue:        #4d9fff;
+      --purple:      #9b59ff;
+      --text-1:      #eeeef5;
+      --text-2:      #9494b8;
+      --text-3:      #4d4d6d;
+      --sidebar-w:   340px;
+      --radius:      14px;
+      --radius-sm:   8px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text-1);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── NOISE TEXTURE OVERLAY ─── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.4;
+    }
+
+    /* ─── AMBIENT GLOW ─── */
+    body::after {
+      content: '';
+      position: fixed;
+      top: -200px;
+      left: -100px;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(255,45,85,0.08) 0%, transparent 65%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ─── LAYOUT ─── */
+    .layout {
+      display: flex;
+      min-height: 100vh;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ─── SIDEBAR ─── */
+    .sidebar {
+      width: var(--sidebar-w);
+      min-height: 100vh;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      position: fixed;
+      top: 0;
+      left: 0;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      z-index: 10;
+    }
+
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 4px; }
+
+    /* Logo / Brand */
+    .brand {
+      padding: 28px 24px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--red), var(--coral));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      box-shadow: 0 4px 20px rgba(255,45,85,0.35);
+      flex-shrink: 0;
+    }
+
+    .brand-name {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.5rem;
+      letter-spacing: 2px;
+      color: var(--text-1);
+      line-height: 1;
+    }
+
+    .brand-name span { color: var(--red); }
+
+    .brand-tag {
+      font-size: 0.72rem;
+      color: var(--text-3);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+
+    /* Form */
+    .sidebar-form {
+      padding: 24px;
+      flex: 1;
+    }
+
+    .field { margin-bottom: 18px; }
+
+    .field label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-bottom: 8px;
+    }
+
+    .field label .dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--red);
+      flex-shrink: 0;
+    }
+
+    input, textarea {
+      width: 100%;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-1);
+      padding: 11px 14px;
+      font-size: 0.88rem;
+      font-family: 'DM Sans', sans-serif;
+      resize: vertical;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      line-height: 1.5;
+    }
+
+    input::placeholder, textarea::placeholder { color: var(--text-3); }
+
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: rgba(255,45,85,0.5);
+      box-shadow: 0 0 0 3px rgba(255,45,85,0.08);
+    }
+
+    .handles-hint {
+      font-size: 0.72rem;
+      color: var(--text-3);
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+
+    .handles-hint code {
+      font-family: 'DM Mono', monospace;
+      background: var(--surface-3);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--text-2);
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 4px 0 18px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, var(--red), var(--coral));
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+      box-shadow: 0 6px 24px rgba(255,45,85,0.3);
+      font-family: 'DM Sans', sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+      box-shadow: 0 10px 30px rgba(255,45,85,0.4);
+    }
+
+    .btn:active { transform: translateY(0); }
+
+    .btn:disabled {
+      background: var(--surface-3);
+      color: var(--text-3);
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .btn-spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+
+    .btn.loading .btn-spinner { display: block; }
+    .btn.loading .btn-label::after { content: "..."; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Sidebar footer */
+    .sidebar-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border);
+    }
+
+    .quota-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.72rem;
+      color: var(--text-3);
+    }
+
+    .quota-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 6px var(--green);
+      flex-shrink: 0;
+    }
+
+    /* ─── MAIN CONTENT ─── */
+    .main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      padding: 32px 36px;
+      min-height: 100vh;
+    }
+
+    /* Progress terminal */
+    .terminal-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 28px;
+    }
+
+    .terminal-bar {
+      background: var(--surface-2);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .terminal-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .terminal-dots span {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .terminal-dots .d1 { background: #ff5f57; }
+    .terminal-dots .d2 { background: #febc2e; }
+    .terminal-dots .d3 { background: #28c840; }
+
+    .terminal-title {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--text-3);
+      letter-spacing: 1px;
+    }
+
+    .log-box {
+      background: transparent !important;
+      border: none !important;
+      border-radius: 0 !important;
+      padding: 18px 20px !important;
+      font-family: 'DM Mono', monospace !important;
+      font-size: 0.82rem !important;
+      min-height: 90px;
+      color: var(--green) !important;
+      white-space: pre-wrap;
+      line-height: 1.7;
+    }
+
+    /* Cursor blink on last line */
+    .log-box::after {
+      content: '█';
+      animation: blink 1s step-end infinite;
+      color: var(--green);
+      opacity: 0.7;
+    }
+
+    @keyframes blink { 0%, 100% { opacity: 0.7; } 50% { opacity: 0; } }
+
+    /* ─── RESULTS ─── */
+    .resultado { display: none; }
+
+    .resultado.visible {
+      display: block;
+      animation: fadeUp 0.5s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Section */
+    .seccion {
+      background: var(--surface) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: var(--radius) !important;
+      padding: 24px !important;
+      margin-bottom: 20px !important;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .seccion::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--red), var(--coral), transparent);
+    }
+
+    .seccion h3 {
+      font-family: 'Bebas Neue', sans-serif !important;
+      font-size: 1.05rem !important;
+      letter-spacing: 3px !important;
+      color: var(--text-2) !important;
+      text-transform: uppercase !important;
+      margin-bottom: 20px !important;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .seccion h3::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ─── CANAL CARDS ─── */
+    .canal-grid {
+      display: grid !important;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)) !important;
+      gap: 14px !important;
+    }
+
+    .canal-card {
+      background: var(--surface-2) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: var(--radius-sm) !important;
+      padding: 16px !important;
+      transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+      position: relative;
+      animation: cardIn 0.4s ease both;
+    }
+
+    .canal-card:nth-child(1) { animation-delay: 0.05s; }
+    .canal-card:nth-child(2) { animation-delay: 0.10s; }
+    .canal-card:nth-child(3) { animation-delay: 0.15s; }
+    .canal-card:nth-child(4) { animation-delay: 0.20s; }
+    .canal-card:nth-child(5) { animation-delay: 0.25s; }
+    .canal-card:nth-child(6) { animation-delay: 0.30s; }
+
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .canal-card:hover {
+      border-color: rgba(255,45,85,0.3) !important;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+    }
+
+    /* Avatar injected by JS enhancer */
+    .canal-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.1rem;
+      letter-spacing: 1px;
+      color: white;
+      margin-bottom: 12px;
+      flex-shrink: 0;
+    }
+
+    .canal-card .nombre {
+      font-weight: 600 !important;
+      color: var(--text-1) !important;
+      font-size: 0.88rem !important;
+      line-height: 1.3;
+      margin-bottom: 2px;
+    }
+
+    .canal-card .handle {
+      color: var(--text-3) !important;
+      font-size: 0.72rem !important;
+      font-family: 'DM Mono', monospace;
+      margin-bottom: 12px !important;
+    }
+
+    .canal-card .stat {
+      font-size: 0.78rem !important;
+      color: var(--text-2) !important;
+      margin-top: 5px !important;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .canal-card .stat span {
+      color: var(--gold) !important;
+      font-weight: 600 !important;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.8rem;
+    }
+
+    .badge {
+      display: inline-flex !important;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px !important;
+      border-radius: 999px !important;
+      font-size: 0.65rem !important;
+      font-weight: 700 !important;
+      letter-spacing: 1px;
+      margin-top: 12px !important;
+      text-transform: uppercase;
+    }
+
+    .badge::before {
+      content: '';
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .badge.alto  { background: rgba(0,214,143,0.12) !important; color: var(--green) !important; }
+    .badge.medio { background: rgba(245,166,35,0.12) !important; color: var(--gold) !important; }
+    .badge.bajo  { background: rgba(255,45,85,0.12) !important;  color: var(--red) !important; }
+
+    /* ─── TAGS ─── */
+    .tag {
+      display: inline-flex !important;
+      align-items: center;
+      background: rgba(77,159,255,0.1) !important;
+      color: var(--blue) !important;
+      border: 1px solid rgba(77,159,255,0.2);
+      padding: 4px 12px !important;
+      border-radius: 999px !important;
+      font-size: 0.75rem !important;
+      margin: 3px !important;
+      font-weight: 500;
+    }
+
+    /* ─── LISTA ─── */
+    .lista { list-style: none !important; }
+
+    .lista li {
+      padding: 9px 0 !important;
+      border-bottom: 1px solid var(--border) !important;
+      font-size: 0.85rem !important;
+      color: var(--text-2) !important;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      line-height: 1.5;
+    }
+
+    .lista li:last-child { border-bottom: none !important; }
+
+    .lista li::before {
+      content: "▸" !important;
+      color: var(--red) !important;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* ─── IDEAS GRID ─── */
+    .ideas-grid {
+      display: grid !important;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)) !important;
+      gap: 12px !important;
+    }
+
+    .idea-card {
+      background: var(--surface-2) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: var(--radius-sm) !important;
+      padding: 14px !important;
+      font-size: 0.83rem !important;
+      color: var(--text-2) !important;
+      transition: border-color 0.2s;
+      line-height: 1.5;
+    }
+
+    .idea-card:hover { border-color: var(--border-bright) !important; }
+
+    .idea-num {
+      font-family: 'Bebas Neue', sans-serif !important;
+      font-size: 0.85rem !important;
+      letter-spacing: 2px;
+      color: var(--red) !important;
+      margin-bottom: 6px !important;
+    }
+
+    /* ─── META ROW ─── */
+    .meta-row {
+      display: flex !important;
+      gap: 14px !important;
+      margin-top: 16px !important;
+    }
+
+    .meta-box {
+      flex: 1 !important;
+      background: var(--surface-2) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: var(--radius-sm) !important;
+      padding: 16px !important;
+      text-align: center !important;
+    }
+
+    .meta-box .label {
+      font-size: 0.65rem !important;
+      letter-spacing: 1.5px;
+      color: var(--text-3) !important;
+      text-transform: uppercase;
+      font-weight: 600;
+      margin-bottom: 8px !important;
+    }
+
+    .meta-box .valor {
+      font-size: 0.85rem !important;
+      color: var(--text-1) !important;
+      font-weight: 500 !important;
+      line-height: 1.4;
+    }
+
+    /* ─── OVERRIDES for inline styles from renderResultado ─── */
+    #patronesContent p,
+    #estrategiaContent p { color: var(--text-2) !important; }
+
+    #patronesContent strong,
+    #estrategiaContent strong { color: var(--text-1) !important; }
+
+    #patronesContent [style*="background:#1a1a1a"],
+    #estrategiaContent [style*="background:#1a1a1a"] {
+      background: var(--surface-2) !important;
+      border-color: var(--border) !important;
+    }
+
+    #estrategiaContent [style*="font-size:1.2rem"] {
+      font-family: 'Bebas Neue', sans-serif !important;
+      font-size: 1.6rem !important;
+      letter-spacing: 2px !important;
+    }
+
+    /* Opportunity box */
+    #patronesContent > div:last-child {
+      background: rgba(245,166,35,0.06) !important;
+      border: 1px solid rgba(245,166,35,0.2) !important;
+      border-radius: var(--radius-sm) !important;
+      padding: 14px !important;
+      margin-top: 14px !important;
+    }
+
+    /* ─── SCROLLBAR ─── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 6px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+    /* ─── STAT CARD SEPARATOR ─── */
+    .canal-sep {
+      height: 1px;
+      background: var(--border);
+      margin: 10px 0;
+    }
+
+    /* ─── SECTION HEADER ROW ─── */
+    .row-stats {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .stat-pill {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 5px 14px;
+      font-size: 0.75rem;
+      color: var(--text-2);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .stat-pill b { color: var(--text-1); }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- ═══ SIDEBAR ═══ -->
+  <aside class="sidebar">
+
+    <div class="brand">
+      <div class="brand-logo">
+        <div class="brand-icon">▶</div>
+        <div>
+          <div class="brand-name">Shorts<span>Intel</span></div>
+        </div>
+      </div>
+      <div class="brand-tag">YouTube Channel Analyzer · IA</div>
+    </div>
+
+    <div class="sidebar-form">
+
+      <div class="field">
+        <label><span class="dot"></span>Nicho</label>
+        <input type="text" id="nicho"
+          placeholder="Ej: Historias animadas para niños"
+          value="Historias animadas cortas para niños y jóvenes">
+      </div>
+
+      <div class="field">
+        <label><span class="dot"></span>Tu canal</label>
+        <textarea id="descripcion" rows="3"
+          placeholder="Describe qué hace tu canal...">Canal de muñecos y personajes animados para niños, creado 100% con IA sin cámaras</textarea>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="field">
+        <label><span class="dot"></span>Canales a analizar</label>
+        <textarea id="handles" rows="9"
+          placeholder="@canal1&#10;@canal2&#10;@canal3">@graciositto
+@risaventuras
+@zonadimbo
+@GarraGol
+@FlickZex
+@UnCortito_</textarea>
+        <div class="handles-hint">Un handle por línea · Ej: <code>@canal</code></div>
+      </div>
+
+      <button class="btn" id="btnAnalizar" onclick="iniciarAnalisis()">
+        <div class="btn-spinner"></div>
+        <span class="btn-label">Analizar canales</span>
+      </button>
+
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="quota-info">
+        <div class="quota-dot"></div>
+        YouTube API conectada · Claude Haiku
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ═══ MAIN ═══ -->
+  <main class="main">
+
+    <!-- Terminal de progreso -->
+    <div class="terminal-wrap">
+      <div class="terminal-bar">
+        <div class="terminal-dots">
+          <span class="d1"></span>
+          <span class="d2"></span>
+          <span class="d3"></span>
+        </div>
+        <div class="terminal-title">AGENT CONSOLE — shorts-intel</div>
+      </div>
+      <div class="log-box" id="log">Listo para analizar — configura los canales y presiona "Analizar"
+</div>
+    </div>
+
+    <!-- Resultados -->
+    <div class="resultado" id="resultado">
+
+      <div class="seccion">
+        <h3>Canales analizados</h3>
+        <div class="canal-grid" id="canalesGrid"></div>
+      </div>
+
+      <div class="seccion">
+        <h3>Patrones del nicho</h3>
+        <div id="patronesContent"></div>
+      </div>
+
+      <div class="seccion">
+        <h3>Estrategia para tu canal</h3>
+        <div id="estrategiaContent"></div>
+      </div>
+
+    </div>
+
+  </main>
+
+</div>
+
+<script>
+/* ─────────────────────────────────────────────
+   FUNCIONES ORIGINALES DE LA APP (sin cambios)
+───────────────────────────────────────────── */
+function iniciarAnalisis() {
+  const handles = document.getElementById("handles").value;
+  const nicho = document.getElementById("nicho").value;
+  const descripcion = document.getElementById("descripcion").value;
+
+  if (!handles.trim() || !nicho.trim()) {
+    alert("Por favor completa el nicho y los canales.");
+    return;
+  }
+
+  const btn = document.getElementById("btnAnalizar");
+  const log = document.getElementById("log");
+  const resultado = document.getElementById("resultado");
+
+  btn.disabled = true;
+  btn.classList.add("loading");
+  btn.querySelector(".btn-label").textContent = "Analizando";
+  log.textContent = "";
+  resultado.classList.remove("visible");
+
+  const formData = new FormData();
+  formData.append("handles", handles);
+  formData.append("nicho", nicho);
+  formData.append("descripcion", descripcion);
+
+  fetch("/analizar", { method: "POST", body: formData })
+    .then(response => {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      function leer() {
+        reader.read().then(({ done, value }) => {
+          if (done) return;
+          const texto = decoder.decode(value);
+          const lineas = texto.split("\n").filter(l => l.startsWith("data: "));
+
+          lineas.forEach(linea => {
+            const data = JSON.parse(linea.replace("data: ", ""));
+
+            if (data.tipo === "progreso") {
+              log.textContent += data.mensaje + "\n";
+              log.scrollTop = log.scrollHeight;
+            } else if (data.tipo === "resultado") {
+              renderResultado(data.data);
+              btn.disabled = false;
+              btn.classList.remove("loading");
+              btn.querySelector(".btn-label").textContent = "Analizar canales";
+            }
+          });
+
+          leer();
+        });
+      }
+      leer();
+    });
+}
+
+function renderResultado(data) {
+  // Canales
+  const grid = document.getElementById("canalesGrid");
+  grid.innerHTML = "";
+  data.canales_analizados.forEach(c => {
+    const nivel = c.potencial_crecimiento || "medio";
+    grid.innerHTML += `
+      <div class="canal-card">
+        <div class="nombre">${c.nombre}</div>
+        <div class="handle">${c.handle}</div>
+        <div class="stat">Suscriptores <span>${(c.suscriptores || 0).toLocaleString()}</span></div>
+        <div class="stat">Eng. promedio <span>${(c.engagement_promedio || 0).toLocaleString()}</span></div>
+        <div class="stat">Frecuencia <span>${c.frecuencia_estimada || 'N/A'}</span></div>
+        <span class="badge ${nivel.toLowerCase()}">${nivel.toUpperCase()}</span>
+      </div>`;
+  });
+
+  // Patrones
+  const p = data.patrones;
+  const patronesDiv = document.getElementById("patronesContent");
+  const temas = (p.temas_que_funcionan || []).map(t => `<span class="tag">${t}</span>`).join("");
+  const elementos = (p.elementos_clave || []).map(e => `<li>${e}</li>`).join("");
+  patronesDiv.innerHTML = `
+    <p style="color:#aaa;font-size:.85rem;margin-bottom:10px">
+      <strong style="color:#fff">Líder del nicho:</strong> ${p.canal_lider || 'N/A'} &nbsp;|&nbsp;
+      <strong style="color:#fff">Frecuencia ideal:</strong> ${p.frecuencia_ideal || 'N/A'} &nbsp;|&nbsp;
+      <strong style="color:#fff">Duración ideal:</strong> ${p.duracion_ideal || 'N/A'}
+    </p>
+    <div style="margin-bottom:12px"><strong style="color:#aaa;font-size:.8rem">TEMAS QUE FUNCIONAN:</strong><br>${temas}</div>
+    <strong style="color:#aaa;font-size:.8rem">ELEMENTOS CLAVE:</strong>
+    <ul class="lista">${elementos}</ul>
+    <div style="margin-top:12px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:12px">
+      <div style="font-size:.75rem;color:#888;margin-bottom:4px">OPORTUNIDAD DETECTADA</div>
+      <div style="color:#fbbf24;font-size:.88rem">${p.oportunidad_detectada || ''}</div>
+    </div>`;
+
+  // Estrategia
+  const e = data.estrategia;
+  const ideas = (e.primeros_7_videos || e.primeros_10_videos || []).map((v, i) =>
+    `<div class="idea-card"><div class="idea-num">VIDEO ${i+1}</div>${v}</div>`
+  ).join("");
+  const herramientas = (e.herramientas_ia_recomendadas || []).map(h =>
+    `<li>
+      <div><strong style="color:#fff">${h.herramienta}</strong> — ${h.uso}</div>
+      ${h.precio_aprox ? `<div style="color:var(--green); font-size: 0.75rem; margin-top: 4px; font-family: 'DM Mono', monospace;">💰 Precio aprox: ${h.precio_aprox}</div>` : ''}
+    </li>`
+  ).join("");
+
+  document.getElementById("estrategiaContent").innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:.75rem;color:#888;margin-bottom:4px">NOMBRE SUGERIDO</div>
+      <div style="font-size:1.2rem;color:#fff;font-weight:700">${e.nombre_sugerido_canal || ''}</div>
+      <div style="color:#aaa;font-size:.85rem;margin-top:4px">${e.propuesta_valor || ''}</div>
+    </div>
+    <div style="margin-bottom:16px">
+      <strong style="color:#aaa;font-size:.8rem">PRIMERAS IDEAS DE VIDEOS:</strong>
+      <div class="ideas-grid" style="margin-top:10px">${ideas}</div>
+    </div>
+    <div style="margin-bottom:16px">
+      <strong style="color:#aaa;font-size:.8rem">HERRAMIENTAS IA RECOMENDADAS:</strong>
+      <ul class="lista">${herramientas}</ul>
+    </div>
+    <div style="margin-bottom:16px">
+      <strong style="color:#aaa;font-size:.8rem">ESTRUCTURA DE CADA SHORT:</strong>
+      <p style="color:#ccc;font-size:.85rem;margin-top:6px">${e.estructura_video || ''}</p>
+    </div>
+    <div class="meta-row">
+      <div class="meta-box">
+        <div class="label">META 3 MESES</div>
+        <div class="valor">${e.meta_3_meses || ''}</div>
+      </div>
+      <div class="meta-box">
+        <div class="label">META 6 MESES</div>
+        <div class="valor">${e.meta_6_meses || ''}</div>
+      </div>
+      <div class="meta-box">
+        <div class="label">CLAVE PARA CRECER</div>
+        <div class="valor">${e.clave_para_crecer || ''}</div>
+      </div>
+    </div>`;
+
+  document.getElementById("resultado").classList.add("visible");
+
+  // Mejoras visuales post-render
+  enhanceCanalesCards();
+  setTimeout(() => window.scrollTo({ top: document.getElementById("resultado").offsetTop - 32, behavior: 'smooth' }), 100);
+}
+
+/* ─────────────────────────────────────────────
+   MEJORAS VISUALES (extensión, no modifica lo original)
+───────────────────────────────────────────── */
+const AVATAR_COLORS = [
+  ['#ff2d55','#ff6b35'],
+  ['#9b59ff','#4d9fff'],
+  ['#00d68f','#4d9fff'],
+  ['#f5a623','#ff6b35'],
+  ['#ff2d55','#9b59ff'],
+  ['#4d9fff','#00d68f'],
+];
+
+function enhanceCanalesCards() {
+  document.querySelectorAll('.canal-card').forEach((card, i) => {
+    if (card.querySelector('.canal-avatar')) return;
+    const nombre = card.querySelector('.nombre');
+    if (!nombre) return;
+    const initials = nombre.textContent.trim().split(' ').slice(0,2).map(w => w[0]?.toUpperCase() || '').join('');
+    const [c1, c2] = AVATAR_COLORS[i % AVATAR_COLORS.length];
+    const avatar = document.createElement('div');
+    avatar.className = 'canal-avatar';
+    avatar.style.background = `linear-gradient(135deg, ${c1}, ${c2})`;
+    avatar.style.boxShadow = `0 4px 16px ${c1}40`;
+    avatar.textContent = initials;
+    card.insertBefore(avatar, card.firstChild);
+  });
+}
+</script>
+
+</body>
+</html>
